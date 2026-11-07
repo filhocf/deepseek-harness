@@ -51,7 +51,7 @@ O artefato deve ser gerado por GitHub Actions e disponibilizado como artifact da
 - falha na preparação deve ser explícita e acionável;
 - `metadata()`, decodificação raw e codificação JPEG devem passar sob `ELECTRON_RUN_AS_NODE=1`.
 
-A implementação atual usa um preparador de Sharp compilado contra libvips do sistema, baseado na solução validada na discussão upstream do DSH. O runner Actions instala `libvips-dev` antes do build.
+A primeira implementação usa um preparador de Sharp compilado contra libvips do sistema, baseado na solução validada na discussão upstream do DSH. A execução real mostrou que `ubuntu-24.04` fornece libvips 8.15.1, enquanto Sharp 0.35.5 exige >=8.18.7. Essa rota foi rejeitada como solução final; o próximo passo é o pipeline patched `sharp-electron` para Sharp 0.35.5, sem depender da versão de libvips do runner.
 
 ### 4.3 Actions
 

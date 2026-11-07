@@ -107,15 +107,17 @@ pkg-config --modversion vips-cpp
 
 O preparador exige a versão mínima declarada pelo Sharp 0.35.5. Se o comando não retornar uma versão suficiente, o preparador deve falhar explicitamente. Não contorne removendo o smoke.
 
-O preparador é:
+O preparador atual é:
 
 ```text
 apps/desktop/scripts/prepare-sharp-electron.ts
 ```
 
-Ele:
+A tentativa de compilação contra libvips do sistema foi rejeitada como solução final: no `ubuntu-24.04` do Actions, `libvips-dev` fornece 8.15.1, mas Sharp 0.35.5 exige >=8.18.7. Não repita execuções com esse preparador esperando resultado diferente. O próximo passo operacional é integrar o pipeline patched `sharp-electron` para Sharp 0.35.5.
 
-1. lê o pin de Sharp em `packages/attachment/attachment-local/package.json`;
+Ele deveria:
+
+1. ler o pin de Sharp em `packages/attachment/attachment-local/package.json`;
 2. lê o `sharp` resolvido no workspace;
 3. verifica a versão do Electron Node;
 4. verifica libvips do sistema;

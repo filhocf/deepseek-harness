@@ -138,7 +138,7 @@ export async function prepareSharpElectron(options: {
   const minimum = minimumLibvipsVersion(sourceManifest.config.libvips)
   if (libvipsVersion === '' || compareVersions(libvipsVersion, minimum) < 0) {
     const found = libvipsVersion === '' ? 'not found' : libvipsVersion
-    throw new Error(`desktop package: system libvips ${found}; install libvips headers ${minimum} or newer`)
+    throw new Error(`desktop package: system libvips ${found}; this build requires ${minimum}. Use the fork's patched sharp-electron pipeline; the Ubuntu runner package is insufficient.`)
   }
   rmSync(options.scratch, { recursive: true, force: true })
   const stage = join(options.scratch, 'stage')

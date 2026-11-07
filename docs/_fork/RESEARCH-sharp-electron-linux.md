@@ -111,26 +111,35 @@ Resolve o problema por patch de símbolos/linker. É uma opção válida, mas in
 
 ### 5.4 Sharp compilado contra libvips do sistema
 
-Escolhida porque:
+Foi a primeira rota implementada porque existe uma implementação validada especificamente no ecossistema DSH. Entretanto, a execução real no GitHub Actions mostrou que o runner Ubuntu 24.04 fornece:
 
-- existe uma implementação validada especificamente no ecossistema DSH;
-- mantém a API e o pin do Sharp;
-- evita o libvips pré-compilado que causa a colisão;
-- permite smoke determinístico sob Electron;
-- macOS/Windows permanecem inalterados.
-
-Custo: o ambiente de build precisa fornecer `libvips-dev` com versão compatível. O workflow Actions instala:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y build-essential pkg-config libvips-dev
+```text
+libvips 8.15.1
 ```
 
-No host local desta investigação, `sudo` exigia senha interativa e o preparador não pôde ser executado localmente. O runner Actions é o ambiente de validação efetivo.
+O Sharp 0.35.5 exige:
+
+```text
+libvips >= 8.18.7
+```
+
+Resultado real da execução Actions:
+
+```text
+Error: desktop package: system libvips 8.15.1; install libvips headers 8.18.7 or newer
+```
+
+Conclusão: a rota não é portátil no runner Ubuntu 24.04 sem compilar/fornecer libvips manualmente. O workflow instala `libvips-dev`, mas isso não basta para atingir a versão mínima.
 
 ### 5.5 Rodar o runtime com Node/Bun em vez de Electron
 
 Eliminaria a classe de conflito, mas mudaria a arquitetura de runtime do DSH e perderia a garantia de testar o mesmo ambiente Electron. Não foi escolhida para esta primeira entrega.
+
+## 6. Decisão atual
+
+A rota `libvips-dev` do Ubuntu foi rejeitada como solução final. O próximo passo correto é trazer o pipeline patched de `janhapke/sharp-electron` para o fork, parametrizado para Sharp 0.35.5, ou empacotar uma variante patched equivalente como dependência explícita.
+
+Não se deve disparar outra execução Actions com o mesmo preparador esperando resultado diferente: o erro de versão é determinístico.
 
 ## 6. O que foi implementado no fork
 
