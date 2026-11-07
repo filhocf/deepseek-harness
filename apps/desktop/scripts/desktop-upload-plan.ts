@@ -6,6 +6,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { dump, load } from 'js-yaml'
 import type { DesktopPackageTargetName } from './package-target.ts'
+import type { DesktopAutoUpdateTarget } from './desktop-auto-update-environment.mjs'
 import {
   desktopBuildRecordFilename,
   desktopLatestInstallerFilename,
@@ -21,6 +22,7 @@ const TARGETS = {
   'mac-arm64': { platform: 'darwin', arch: 'arm64', os: 'mac' },
   'mac-x64': { platform: 'darwin', arch: 'x64', os: 'mac' },
   'win-x64': { platform: 'win32', arch: 'x64', os: 'win' },
+  'linux-x64': { platform: 'linux', arch: 'x64', os: 'linux' },
 } as const satisfies Record<DesktopPackageTargetName, {
   readonly platform: NodeJS.Platform
   readonly arch: string
@@ -187,9 +189,10 @@ export async function createDesktopUploadPlan(
   options: DesktopUploadPlanOptions = {},
 ): Promise<DesktopUploadPlan> {
   const target = TARGETS[targetName]
-  if (target === undefined) {
+  if (target === undefined || targetName === 'linux-x64') {
     throw new Error(`desktop upload: unsupported target ${String(targetName)}`)
   }
+  const releaseTarget = targetName as DesktopAutoUpdateTarget
   const environment = options.environment ?? process.env
   const repositoryRoot = options.repositoryRoot ?? REPOSITORY_ROOT
   const appRoot = options.appRoot ?? APP_ROOT
@@ -282,7 +285,7 @@ export async function createDesktopUploadPlan(
     contents: dump(published),
   }
   artifacts.push(channelArtifact)
-  const latestFilename = desktopLatestInstallerFilename(targetName)
+  const latestFilename = desktopLatestInstallerFilename(releaseTarget)
   const latestKey = `desktop/${latestFilename}`
   return {
     environment: update.environment,

@@ -1,0 +1,91 @@
+name: Linux AppImage
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or commit to build'
+        required: false
+        default: 'experiment/linux-package-target'
+        type: string
+  push:
+    branches:
+      - experiment/linux-package-target
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-appimage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Verify upstream reference
+        run: |
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
+          git fetch --no-tags upstream master
+          git merge-base --is-ancestor upstream/master HEAD || {
+            echo 'The selected ref is behind upstream/master; synchronize the fork before building.' >&2
+            exit 1
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26.13.0
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install Linux native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libvips-dev
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build repository
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm run build
+
+      - name: Run Linux packaging tests
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm exec vitest run apps/desktop/tests/desktop-build-paths.spec.ts apps/desktop/tests/package-target.spec.ts apps/desktop/tests/package-target-stages.spec.ts
+
+      - name: Build Linux AppImage
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm run package:desktop:linux:x64
+
+      - name: Locate AppImage
+        id: artifact
+        run: |
+          appimage="$(find apps/desktop/.desktop-build -type f -name '*.AppImage' -print -quit)"
+          test -n "$appimage"
+          file "$appimage"
+          chmod +x "$appimage"
+          echo "path=$appimage" >> "$GITHUB_OUTPUT"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-linux-x64-appimage-${{ github.sha }}
+          path: ${{ steps.artifact.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
