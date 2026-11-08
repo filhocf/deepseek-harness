@@ -137,9 +137,9 @@ Eliminaria a classe de conflito, mas mudaria a arquitetura de runtime do DSH e p
 
 ## 6. Decisão atual
 
-A rota `libvips-dev` do Ubuntu foi rejeitada como solução final. O próximo passo correto é trazer o pipeline patched de `janhapke/sharp-electron` para o fork, parametrizado para Sharp 0.35.5, ou empacotar uma variante patched equivalente como dependência explícita.
+A rota `libvips-dev` do Ubuntu foi rejeitada como solução final. A solução implementada é o pipeline patched de `janhapke/sharp-electron` trazido para o fork em `tools/sharp-electron/build.sh`: compila Sharp 0.35.5 contra o `libvips` do próprio fork dentro de um container (`podman` local, `docker` no runner) e exporta o binding único mais `libvips-cpp.so`. O preparador consome esse artefato por `DSH_SHARP_ELECTRON_PACKAGE` e não valida mais o libvips do sistema — a mensagem `system libvips 8.15.1` só aparece quando o artefato externo está ausente.
 
-Não se deve disparar outra execução Actions com o mesmo preparador esperando resultado diferente: o erro de versão é determinístico.
+Não se deve disparar execução Actions sem o step `Build patched Sharp/Electron package`: o erro de versão é determinístico.
 
 ## 6. O que foi implementado no fork
 

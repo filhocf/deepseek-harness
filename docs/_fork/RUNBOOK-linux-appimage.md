@@ -191,18 +191,37 @@ Workflow:
 
 Gatilhos:
 
-- `workflow_dispatch`, com `ref` opcional;
-- push em `experiment/linux-package-target`;
-- agendamento semanal.
+- `workflow_dispatch`, com `upstream_tag` e `force` opcionais;
+- push em `experiment/linux-package-target` (ignora `docs/**` e `*.md`);
+- agendamento diário (`17 4 * * *`).
 
-Execução manual:
+Dois modos no mesmo job:
+
+| Modo | Gatilho | Efeito |
+|---|---|---|
+| iteração | push, ou dispatch sem tag | constrói o head da branch; artifact de 14 dias; sem release |
+| acompanhamento | schedule, ou dispatch com `upstream_tag` | resolve a última release do upstream, faz merge da tag no runner, constrói e publica `linux-<tag>` |
+
+A resolução usa a lista de releases da API (`releases?per_page=1`), não `releases/latest`: o upstream publica apenas pre-releases e `latest` as ignora.
+
+Execução manual de iteração:
+
+```bash
+gh workflow run linux-appimage.yml \
+  --repo filhocf/deepseek-harness \
+  --ref experiment/linux-package-target
+```
+
+Execução de acompanhamento para uma tag específica:
 
 ```bash
 gh workflow run linux-appimage.yml \
   --repo filhocf/deepseek-harness \
   --ref experiment/linux-package-target \
-  -f ref=experiment/linux-package-target
+  -f upstream_tag=dsh-v0.2.2-rc.1
 ```
+
+Idempotência: se a release `linux-<tag>` já existir no fork, o job termina sem construir. `-f force=true` reconstrói e reenvia os assets.
 
 Listar execuções:
 
@@ -230,6 +249,14 @@ O artifact é retido por 14 dias e recebe o nome:
 ```text
 dsh-linux-x64-appimage-<commit>
 ```
+
+No modo de acompanhamento, a release do fork fica em:
+
+```text
+https://github.com/filhocf/deepseek-harness/releases/tag/linux-<tag upstream>
+```
+
+com dois assets: o `.AppImage` e o `.AppImage.sha256`. O release é marcado como pre-release, coerente com a origem.
 
 ## 10. Diagnóstico por estágio
 

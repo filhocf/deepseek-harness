@@ -1,21 +1,34 @@
 name: Linux AppImage
 
+# Dois modos compartilham o mesmo pipeline:
+#   - iteração: push / dispatch manual sem tag constrói o head da branch e guarda o artifact por 14 dias;
+#   - acompanhamento: schedule / dispatch com tag faz merge do release do upstream na branch,
+#     constrói e publica um release permanente `linux-<tag>` com o AppImage e o digest.
+
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: 'Branch or commit to build'
+      upstream_tag:
+        description: 'Tag de release do upstream a construir (vazio = último release do upstream)'
         required: false
-        default: 'experiment/linux-package-target'
+        default: ''
         type: string
+      force:
+        description: 'Reconstruir mesmo quando o release Linux daquela tag já existe'
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - experiment/linux-package-target
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   schedule:
-    - cron: '17 4 * * 1'
+    - cron: '17 4 * * *'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: linux-appimage-${{ github.ref }}
@@ -24,22 +37,80 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM_REPO: deepseek-ai/deepseek-harness
+      FORK_REPO: ${{ github.repository }}
     steps:
       - name: Checkout selected ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
 
-      - name: Verify upstream reference
+      - name: Resolve upstream release
+        id: upstream
         run: |
-          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
-          git fetch --no-tags upstream master
-          git merge-base --is-ancestor upstream/master HEAD || {
-            echo 'The selected ref is behind upstream/master; synchronize the fork before building.' >&2
+          set -euo pipefail
+          tag='${{ inputs.upstream_tag }}'
+          if [ -z "$tag" ]; then
+            # O upstream publica apenas pre-releases, então `releases/latest` nunca casaria.
+            tag="$(gh api "repos/$UPSTREAM_REPO/releases?per_page=1" --jq '.[0].tag_name')"
+          fi
+          test -n "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Tag do upstream: $tag"
+
+      - name: Decide build and publication mode
+        id: mode
+        run: |
+          set -euo pipefail
+          tag='${{ steps.upstream.outputs.tag }}'
+          event='${{ github.event_name }}'
+          dispatch_tag='${{ inputs.upstream_tag }}'
+          force='${{ inputs.force }}'
+          iteration=false
+          if [ "$event" = 'push' ]; then
+            iteration=true
+          elif [ "$event" = 'workflow_dispatch' ] && [ -z "$dispatch_tag" ] && [ "$force" != 'true' ]; then
+            iteration=true
+          fi
+          if [ "$iteration" = 'true' ]; then
+            printf 'build=true\npublish=false\nmerge=false\n' >> "$GITHUB_OUTPUT"
+            echo 'Build de iteração: head da branch, somente artifact.'
+            exit 0
+          fi
+          if [ "$force" != 'true' ] && gh release view "linux-$tag" --repo "$FORK_REPO" >/dev/null 2>&1; then
+            printf 'build=false\npublish=false\nmerge=false\n' >> "$GITHUB_OUTPUT"
+            echo "Release linux-$tag já existe; nada a fazer."
+            exit 0
+          fi
+          printf 'build=true\npublish=true\nmerge=true\n' >> "$GITHUB_OUTPUT"
+          echo "Build de acompanhamento: merge de $tag e publicação de linux-$tag."
+
+      - name: Merge upstream release
+        if: steps.mode.outputs.merge == 'true'
+        run: |
+          set -euo pipefail
+          tag='${{ steps.upstream.outputs.tag }}'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add upstream "https://github.com/$UPSTREAM_REPO.git"
+          git fetch --no-tags upstream "refs/tags/$tag:refs/tags/$tag"
+          if ! git merge --no-edit "$tag"; then
+            git merge --abort || true
+            echo "::error::A tag $tag conflita com a branch de empacotamento do fork; resolva localmente e dispare de novo."
             exit 1
-          }
+          fi
+          git --no-pager log --oneline -3
+
+      - name: Report upstream distance
+        run: |
+          set -euo pipefail
+          git remote add upstream "https://github.com/$UPSTREAM_REPO.git" 2>/dev/null || true
+          git fetch --no-tags upstream master >/dev/null 2>&1 || true
+          behind="$(git rev-list --count "HEAD..upstream/master" 2>/dev/null || echo '?')"
+          echo "Commits atrás de upstream/master: $behind (informativo; o build de acompanhamento faz merge da tag)."
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -60,9 +131,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libvips-dev
+          docker version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build patched Sharp/Electron package
+        env:
+          SHARP_VERSION: 0.35.5
+          CONTAINER_ENGINE: docker
+          DSH_SHARP_ELECTRON_PACKAGE: ${{ github.workspace }}/.sharp-electron-package
+        run: tools/sharp-electron/build.sh
 
       - name: Build repository
         env:
@@ -78,21 +157,47 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
           DSH_DESKTOP_APP_ID: com.deepseek.dsh
+          DSH_SHARP_ELECTRON_PACKAGE: ${{ github.workspace }}/.sharp-electron-package
         run: pnpm run package:desktop:linux:x64
 
       - name: Locate AppImage
         id: artifact
         run: |
+          set -euo pipefail
           appimage="$(find apps/desktop/.desktop-build -type f -name '*.AppImage' -print -quit)"
           test -n "$appimage"
           file "$appimage"
           chmod +x "$appimage"
+          sha256sum "$appimage" | tee "$appimage.sha256"
           echo "path=$appimage" >> "$GITHUB_OUTPUT"
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
           name: dsh-linux-x64-appimage-${{ github.sha }}
-          path: ${{ steps.artifact.outputs.path }}
+          path: |
+            ${{ steps.artifact.outputs.path }}
+            ${{ steps.artifact.outputs.path }}.sha256
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish Linux release
+        if: steps.mode.outputs.publish == 'true'
+        env:
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+          release_tag="linux-$UPSTREAM_TAG"
+          appimage='${{ steps.artifact.outputs.path }}'
+          notes="AppImage Linux x64 construído a partir do release $UPSTREAM_TAG do upstream mais a branch de empacotamento do fork.
+          Build local sem assinatura: não há canal de assinatura nem de atualização automática."
+          if gh release view "$release_tag" --repo "$FORK_REPO" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "$appimage" "$appimage.sha256" --repo "$FORK_REPO" --clobber
+          else
+            gh release create "$release_tag" "$appimage" "$appimage.sha256" \
+              --repo "$FORK_REPO" \
+              --title "DSH Linux x64 — $UPSTREAM_TAG" \
+              --notes "$notes" \
+              --prerelease
+          fi
+          gh release view "$release_tag" --repo "$FORK_REPO" --json tagName,assets --jq '.tagName, (.assets[] | "\(.name) \(.size)")'

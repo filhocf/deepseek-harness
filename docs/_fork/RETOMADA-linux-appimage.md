@@ -1,0 +1,100 @@
+# RETOMADA — DSH Desktop Linux (AppImage)
+
+Atualizado: 2026-11-08, host `sirdata`.
+
+## Objetivo
+
+Duas entregas, não uma:
+
+1. **AppImage Linux executável** que abre o DSH e permite experimentar localmente.
+2. **Workflow que acompanha o upstream** — a cada release do projeto original, merge da tag e publicação de um AppImage novo.
+
+## Estado real em 2026-11-08 14:40
+
+| Item | Estado | Evidência |
+|---|---|---|
+| AppImage local | **funciona** | `~/.local/bin/dsh-desktop` (379 886 397 bytes), executa, mantém processos Electron vivos, anuncia `dsh web: http://127.0.0.1:<porta>/?token=…`, sem `desktop policy: unsupported platform` |
+| Testes de empacotamento | **111/111** | `vitest run` nos 6 arquivos de desktop (1,5 s) |
+| CI do fork | **vermelho** | último run 42425692297 falhou em `Build Linux AppImage`: `system libvips 8.15.1; this build requires 8.18.7` — o run usou o workflow sem o pipeline Sharp patchado |
+| Release publicada no fork | **não existe** | nenhuma release em `filhocf/deepseek-harness` |
+| Acompanhamento de release upstream | **implementado, não exercitado** | `.github/workflows/linux-appimage.yml` reescrito nesta sessão |
+
+Nota de leitura do histórico: o CI falhou porque o step `Build patched Sharp/Electron package` e o script `tools/sharp-electron/build.sh` estavam **apenas na worktree** (untracked), nunca commitados. O erro de libvips 8.15.1 é a consequência, não a causa raiz.
+
+## Definido como pronto
+
+1. `pnpm run package:desktop:linux:x64` termina com `PACKAGE_EXIT=0`.
+2. Smoke `scripts/smoke-packaged-runtime.ts --unsigned` passa (inclui integridade do ASAR).
+3. AppImage executa e **não** emite `desktop policy: unsupported platform`.
+4. Commit + push autorizados, CI verde.
+5. Release `linux-<tag upstream>` publicada com AppImage e `.sha256`.
+
+Artefato existente **não** é entrega: gate vermelho não fecha trabalho.
+
+## Ambiente obrigatório (local)
+
+```bash
+source ~/.nvm/nvm.sh && nvm use 26.13.0     # Node do sistema e NVM default são 22/24
+export CONTAINER_ENGINE=podman               # host usa Podman 5.8.6; no runner o default é docker
+```
+
+```bash
+export DSH_DESKTOP_APP_ID=com.deepseek.dsh
+export DSH_SHARP_ELECTRON_PACKAGE=$PWD/.sharp-electron-package
+```
+
+O pacote Sharp patchado é construído por `tools/sharp-electron/build.sh` e fica **fora** de `.desktop-build` (que o `prepare-dsh` apaga). `.sharp-electron-package/` está no `.gitignore` — 20 MB de artefato não se versiona.
+
+## Já resolvido (não redescobrir)
+
+| Problema | Causa real | Correção |
+|---|---|---|
+| `DSH_DESKTOP_APP_ID must be set` | preflight exige app id | variável acima |
+| `patched sharp package is missing package.json` | caminho do artefato Sharp errado no comando manual | usar `.sharp-electron-package` persistente |
+| artefato Sharp sumia | `prepare-dsh` reseta `.desktop-build` | artefato fora dessa árvore |
+| `Cannot find module .../vendor/sharp/scripts/build.mjs` | fork pinado não traz o script; substituição parcial do vendor | checkout completo do submódulo + metadata 0.35.5 |
+| `found 4 bindings` | contava `obj.target` e `@img` opcionais | limpar duplicatas antes da validação |
+| `ERR_DLOPEN_FAILED libvips-cpp.so.8.18.6` | libvips compilada não era exportada | exportar `lib/` junto do artefato |
+| mesmo erro no runtime payload | processo Electron filho sem `LD_LIBRARY_PATH` | copiar `lib` para `resourcesRuntime/lib` e propagar via `prependLibraryPath` |
+| `executableName contains characters ...` | nome derivado do pacote escopado | `linux.executableName: 'deepseek-harness'` |
+| smoke abria `mac/DeepSeek Harness.app` | script assumia macOS para todo alvo não-Windows | ramo explícito `linux-unpacked` |
+| `desktop policy: unsupported platform` | política embutida em pacote Linux | Linux não resolve política (builder e preflight) |
+| `ASAR integrity verification failed` | comparava bytes de `package.json` reescrito pelo electron-builder e modo `+x` que o ASAR não preserva | comparar conteúdo por bytes/SHA e metadata por identidade; modo só para entradas unpacked |
+| `system libvips 8.15.1` no runner | sem o pipeline patchado, o preparador valida o libvips do sistema | step dedicado que constrói o pacote com o container engine antes do empacotamento |
+| `Electron cache zip missing` | `build.sh` exigia cache local do Electron | cai para `node_modules/electron/install.js` quando o zip não existe |
+| caminho pnpm fixo em `sharp@0.35.5_@types+node@22.20.1` | sufixo de peer dependency muda | resolver por glob `sharp@<versão>_*/node_modules/sharp` |
+
+## Workflow de acompanhamento (desenho fixado)
+
+`.github/workflows/linux-appimage.yml`, dois modos no mesmo job:
+
+- **Iteração** — `push` na branch, ou `workflow_dispatch` sem tag: constrói o head, guarda artifact de 14 dias, não publica release.
+- **Acompanhamento** — `schedule` diário (`17 4 * * *`) ou dispatch com `upstream_tag`: resolve a última release do upstream via API (a lista, não `releases/latest`, porque o upstream só publica pre-release), faz `git merge` da tag no runner, constrói e cria/atualiza a release `linux-<tag>` com o AppImage e o `.sha256`.
+
+Idempotência sem arquivo de estado: a existência de `linux-<tag>` no fork é o registro. `force=true` refaz.
+
+## Pendências abertas
+
+1. **Push autorizado** — nada nesta lista avança sem o push do commit.
+2. **CI verde** — primeira execução com o pipeline patchado; o build do libvips em container é o trecho não exercitado.
+3. **Primeira release** — dispatch com `upstream_tag=dsh-v0.2.2-rc.1` para materializar `linux-dsh-v0.2.2-rc.1`.
+4. **Conflito de merge futuro** — se o upstream mexer em `prepare-sharp-electron.ts` ou `electron-builder-config.mjs`, o merge falha de propósito e o CI fica vermelho; a resolução é local, na branch.
+
+## AppImage atual (local)
+
+```text
+~/.local/bin/dsh-desktop
+~/git/deepseek-harness/apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/deepseek-harness-0.2.2-rc.1-linux-x86_64-unsigned.AppImage
+```
+
+- 379 886 397 bytes, ELF 64-bit x86-64, executável
+- sha256 `fd19dd9d81b3e31971ccad579c2621276955fc71c31c4ae4fecd9cd8245cb380`
+- Executa com `--no-sandbox` (o host não tem user namespaces para o sandbox do Chromium)
+
+## Regras de execução (aprendidas nesta frente)
+
+- **Gate vermelho não é entrega.** Não declarar pronto com `PACKAGE_EXIT=1`.
+- **Um build por rodada.** Reiniciar empacotamento a cada hipótese gasta ~5 min por tentativa; agrupar correções e então empacotar.
+- **Validar efeito externo.** Resumo de subagente não é prova; conferir artefato, arquivo e execução no processo principal.
+- **Não apagar untracked alheio** (`examples/`, PNGs de outras frentes).
+- **Não publicar sem autorização** de Claudio.
