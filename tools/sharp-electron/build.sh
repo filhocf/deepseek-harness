@@ -72,8 +72,20 @@ fi
 # Keep only the runtime binding. Native build intermediates and optional @img
 # payloads are not part of the exported Electron package and otherwise make
 # duplicate-count validation fail.
-find "$WORK" -type f -path '*/obj.target/*' -name "sharp-*.node" -delete
-find "$WORK" -type f -path '*/node_modules/@img/sharp-*/lib/sharp-*.node' -delete
+# Container builds run as root in GitHub's docker, so the artefacts belong to
+# root and a plain rm fails for the runner user; fall back to passwordless sudo
+# only when the direct removal is denied.
+delete_matching() {
+  local description="$1" pattern="$2" name="$3" file
+  while IFS= read -r -d '' file; do
+    rm -f "$file" 2>/dev/null || sudo -n rm -f "$file" || {
+      echo "sharp-electron: cannot delete $description $file" >&2
+      exit 1
+    }
+  done < <(find "$WORK" -type f -path "$pattern" -name "$name" -print0)
+}
+delete_matching 'build intermediate' '*/obj.target/*' 'sharp-*.node'
+delete_matching 'optional payload' '*/node_modules/@img/sharp-*/lib/sharp-*.node' 'sharp-*.node'
 binding_count=$(find "$WORK" -type f -name "sharp-*.node" | wc -l)
 if [ "$binding_count" -ne 1 ]; then
   echo "sharp-electron: expected exactly one native binding, found $binding_count" >&2
