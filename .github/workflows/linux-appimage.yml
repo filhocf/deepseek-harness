@@ -168,10 +168,14 @@ jobs:
           test -n "$appimage"
           file "$appimage"
           chmod +x "$appimage"
-          # Gravar o digest relativo ao diretório do artefato: um caminho absoluto do runner
-          # tornaria o .sha256 inútil para `sha256sum -c` em outra máquina.
-          ( cd "$(dirname "$appimage")" && sha256sum "$(basename "$appimage")" | tee "$(basename "$appimage").sha256" )
+          # Digest relativo ao diretório do artefato (caminho absoluto do runner seria inútil
+          # em outra máquina) e um único SHA256SUMS por release, para o instalador validar.
+          ( cd "$(dirname "$appimage")" \
+            && sha256sum "$(basename "$appimage")" | tee "$(basename "$appimage").sha256" \
+            && sha256sum "$(basename "$appimage")" > SHA256SUMS )
+          cat SHA256SUMS 2>/dev/null || cat "$(dirname "$appimage")/SHA256SUMS"
           echo "path=$appimage" >> "$GITHUB_OUTPUT"
+          echo "sums=$(dirname "$appimage")/SHA256SUMS" >> "$GITHUB_OUTPUT"
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
@@ -180,6 +184,8 @@ jobs:
           path: |
             ${{ steps.artifact.outputs.path }}
             ${{ steps.artifact.outputs.path }}.sha256
+            ${{ steps.artifact.outputs.sums }}
+            tools/linux-appimage/install.sh
           if-no-files-found: error
           retention-days: 14
 
@@ -191,17 +197,21 @@ jobs:
           set -euo pipefail
           release_tag="linux-$UPSTREAM_TAG"
           appimage='${{ steps.artifact.outputs.path }}'
+          sums='${{ steps.artifact.outputs.sums }}'
           installer="$RUNNER_TEMP/dsh-install.sh"
           cp tools/linux-appimage/install.sh "$installer"
           notes="AppImage Linux x64 construído a partir do release $UPSTREAM_TAG do upstream mais a branch de empacotamento do fork.
           Build local sem assinatura: não há canal de assinatura nem de atualização automática.
 
           Instalação em uma linha:
-          curl -fsSL https://raw.githubusercontent.com/$FORK_REPO/main/tools/linux-appimage/install.sh | bash"
+          curl -fsSL https://raw.githubusercontent.com/$FORK_REPO/main/tools/linux-appimage/install.sh | bash
+
+          Integridade: o instalador confere o sha256 do AppImage contra SHA256SUMS. Para garantia fora do canal de download, fixe o hash com DSH_EXPECTED_SHA256."
+          assets=("$appimage" "$appimage.sha256" "$sums" "$installer")
           if gh release view "$release_tag" --repo "$FORK_REPO" >/dev/null 2>&1; then
-            gh release upload "$release_tag" "$appimage" "$appimage.sha256" "$installer" --repo "$FORK_REPO" --clobber
+            gh release upload "$release_tag" "${assets[@]}" --repo "$FORK_REPO" --clobber
           else
-            gh release create "$release_tag" "$appimage" "$appimage.sha256" "$installer" \
+            gh release create "$release_tag" "${assets[@]}" \
               --repo "$FORK_REPO" \
               --title "DSH Linux x64 — $UPSTREAM_TAG" \
               --notes "$notes" \

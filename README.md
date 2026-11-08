@@ -58,6 +58,26 @@ Start with the [development guide](docs/development.md) and [architecture docume
 
 For agents, follow [AGENTS.md](AGENTS.md).
 
+## Linux AppImage (this fork)
+
+This fork publishes an **unsigned Linux x64 AppImage** for every upstream release. It is built on `main` from the upstream release tag plus the fork's packaging changes; it is not an upstream deliverable and has no signing or auto-update channel.
+
+Install the newest published build:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/filhocf/deepseek-harness/main/tools/linux-appimage/install.sh | bash
+```
+
+The installer resolves the latest `linux-*` release through the API listing, downloads the AppImage and its digest, verifies the sha256, installs `~/.local/bin/dsh-desktop`, writes the `dsh` shortcut (`--no-sandbox`, plus `--appimage-extract-and-run` when `/dev/fuse` is missing) and the menu entry.
+
+Integrity: each release ships a `SHA256SUMS` file next to the binary. Because that file travels through the same channel as the AppImage, it detects corruption and truncation but not a replaced release. For a guarantee outside the download channel, pin the digest yourself:
+
+```bash
+DSH_EXPECTED_SHA256=<digest> curl -fsSL .../install.sh | bash
+```
+
+Fork-specific operation notes: [docs/_fork/RETOMADA-linux-appimage.md](docs/_fork/RETOMADA-linux-appimage.md) and [docs/_fork/RUNBOOK-linux-appimage.md](docs/_fork/RUNBOOK-linux-appimage.md). Upstream documentation remains in the sections above.
+
 ## Citation
 
 ```bibtex

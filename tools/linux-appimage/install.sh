@@ -65,18 +65,38 @@ if [ -n "${DSH_INSTALL_FROM_FILE:-}" ]; then
 else
   tag=${DSH_RELEASE_TAG:-}
   [ -n "$tag" ] || tag=$(resolve_tag)
-  appimage=$(resolve_asset "$tag")
-  base="https://github.com/$repo/releases/download/$tag"
+  appimage=${DSH_RELEASE_ASSET:-}
+  [ -n "$appimage" ] || appimage=$(resolve_asset "$tag")
+  base=${DSH_RELEASE_BASE:-https://github.com/$repo/releases/download/$tag}
   say "install: release $tag, asset $appimage"
   curl -fL --retry 3 --progress-bar "$base/$appimage" -o "$tmp/$appimage" \
     || die "falha ao baixar $base/$appimage"
-  if curl -fsSL "$base/$appimage.sha256" -o "$tmp/$appimage.sha256"; then
-    expected=$(awk 'NR==1{print $1}' "$tmp/$appimage.sha256")
-    actual=$(sha256sum "$tmp/$appimage" | awk '{print $1}')
-    [ "$expected" = "$actual" ] || die "digest não confere: esperado $expected, obtido $actual"
-    say "install: sha256 conferido ($actual)"
+
+  # Integridade em três camadas, da mais forte para a mais fraca:
+  #   1. DSH_EXPECTED_SHA256 — pin fora do canal de download, o único que resiste a
+  #      substituição do próprio release;
+  #   2. SHA256SUMS do release — um arquivo por release com todos os binários;
+  #   3. <asset>.sha256 — compatibilidade com o formato por asset.
+  expected=""
+  origem=""
+  if [ -n "${DSH_EXPECTED_SHA256:-}" ]; then
+    expected=$DSH_EXPECTED_SHA256
+    origem="DSH_EXPECTED_SHA256"
+  elif curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" 2>/dev/null; then
+    expected=$(awk -v n="$appimage" '$2 == n || $2 == "*" n { print $1; exit }' "$tmp/SHA256SUMS")
+    origem="SHA256SUMS do release"
+  elif curl -fsSL "$base/$appimage.sha256" -o "$tmp/$appimage.sha256" 2>/dev/null; then
+    expected=$(awk 'NR == 1 { print $1 }' "$tmp/$appimage.sha256")
+    origem=".sha256 do release"
+  fi
+  if [ -z "$expected" ]; then
+    [ "${DSH_ALLOW_UNVERIFIED:-0}" = "1" ] \
+      || die "release sem digest verificável; use DSH_EXPECTED_SHA256 ou DSH_ALLOW_UNVERIFIED=1"
+    say "install: AVISO — seguindo sem verificação de integridade (DSH_ALLOW_UNVERIFIED=1)"
   else
-    say "install: AVISO — release sem .sha256; seguindo sem verificação de digest"
+    actual=$(sha256sum "$tmp/$appimage" | awk '{ print $1 }')
+    [ "$expected" = "$actual" ] || die "digest não confere ($origem): esperado $expected, obtido $actual"
+    say "install: sha256 conferido por $origem ($actual)"
   fi
 fi
 
