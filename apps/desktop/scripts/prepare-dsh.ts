@@ -181,6 +181,9 @@ async function main(): Promise<void> {
         const runtimeSharp = join(DSH_OUTPUT_ROOT, 'node_modules', 'sharp')
         rmSync(runtimeSharp, { recursive: true, force: true })
         cpSync(prepared, runtimeSharp, { recursive: true, dereference: true })
+        const runtimeLib = join(RUNTIME_ROOT, 'lib')
+        mkdirSync(runtimeLib, { recursive: true })
+        cpSync(join(prepared, 'lib'), runtimeLib, { recursive: true, dereference: true })
       })
     }
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:primary-smoke', async () => smokePrimaryRuntime(join(RUNTIME_ROOT, 'primary-runtime')))
