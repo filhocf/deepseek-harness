@@ -13,11 +13,12 @@ Duas entregas, não uma:
 
 | Item | Estado | Evidência |
 |---|---|---|
-| AppImage local | **funciona** | `~/.local/bin/dsh-desktop` (379 886 397 bytes), executa, mantém processos Electron vivos, anuncia `dsh web: http://127.0.0.1:<porta>/?token=…`, sem `desktop policy: unsupported platform` |
-| Testes de empacotamento | **111/111** | `vitest run` nos 6 arquivos de desktop (1,5 s) |
-| CI do fork | **vermelho** | último run 42425692297 falhou em `Build Linux AppImage`: `system libvips 8.15.1; this build requires 8.18.7` — o run usou o workflow sem o pipeline Sharp patchado |
-| Release publicada no fork | **não existe** | nenhuma release em `filhocf/deepseek-harness` |
-| Acompanhamento de release upstream | **implementado, não exercitado** | `.github/workflows/linux-appimage.yml` reescrito nesta sessão |
+| AppImage | **entregue** | `~/.local/bin/dsh-desktop` instalado pelo one-liner a partir da release (379 853 100 bytes, sha256 `1cd1e267…`), executado com 7–8 processos, janela criada e `dsh web` anunciado |
+| Testes de empacotamento | **111/111** | `vitest run` nos 6 arquivos de desktop |
+| CI do fork | **verde** | runs `42515741359` (iteração) e `42518568379` (acompanhamento) concluídos sem falha |
+| Release no fork | **publicada** | `linux-dsh-v0.2.2-rc.1` com AppImage, `.sha256`, `SHA256SUMS` e `dsh-install.sh` |
+| Acompanhamento de release upstream | **exercitado** | dispatch resolveu a tag, fez o merge (no-op), reconstruiu e publicou |
+| Instalação de uma linha | **validada** | `curl … install.sh \| bash` conferiu o digest e instalou em `~/.local/bin` |
 
 Nota de leitura do histórico: o CI falhou porque o step `Build patched Sharp/Electron package` e o script `tools/sharp-electron/build.sh` estavam **apenas na worktree** (untracked), nunca commitados. O erro de libvips 8.15.1 é a consequência, não a causa raiz.
 
@@ -84,10 +85,9 @@ Idempotência sem arquivo de estado: a existência de `linux-<tag>` no fork é o
 
 ## Pendências abertas
 
-1. **Push autorizado** — nada nesta lista avança sem o push do commit.
-2. **CI verde** — primeira execução com o pipeline patchado; o build do libvips em container é o trecho não exercitado.
-3. **Primeira release** — dispatch com `upstream_tag=dsh-v0.2.2-rc.1` para materializar `linux-dsh-v0.2.2-rc.1`.
-4. **Conflito de merge futuro** — se o upstream mexer em `prepare-sharp-electron.ts` ou `electron-builder-config.mjs`, o merge falha de propósito e o CI fica vermelho; a resolução é local, na branch.
+1. **Cron diário** — o agendamento (`17 4 * * *`) ainda não disparou sozinho; a primeira execução automática será o próximo teste do automatismo.
+2. **Conflito de merge futuro** — se o upstream mexer em `prepare-sharp-electron.ts`, `electron-builder-config.mjs` ou `smoke-runtime.ts`, o merge falha de propósito e o CI fica vermelho; a resolução é local, em `main`.
+3. **Engine Office nativo** — frente separada; o Linux entrega degradação controlada, com PDF pelo CLI.
 
 ## Limitação conhecida — conversão Office no Linux
 
