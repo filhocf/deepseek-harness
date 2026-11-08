@@ -166,7 +166,17 @@ A execução só é considerada concluída quando o `file` confirmar um executá
 
 ## 8. Instalação local em ~/.local/bin
 
-Actions não escreve na máquina local. Depois de baixar um AppImage validado:
+Instalação em uma linha, a partir da release mais recente (`linux-*`) publicada no fork:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/filhocf/deepseek-harness/main/tools/linux-appimage/install.sh | bash
+```
+
+O instalador resolve a release mais recente pela API (lista, porque o upstream só publica pre-release), baixa o `.AppImage` e o `.sha256`, confere o digest, instala em `~/.local/bin/dsh-desktop`, cria o atalho `~/.local/bin/dsh` (com `--no-sandbox`, e `--appimage-extract-and-run` quando `/dev/fuse` não existe) e a entrada de menu quando o XDG está presente.
+
+Variáveis úteis: `DSH_RELEASE_TAG` (tag exata), `DSH_INSTALL_DIR` (outro destino), `DSH_RELEASE_REPO` (outro fork). O mesmo comando serve para qualquer host Linux x64.
+
+Alternativa manual, sem o instalador:
 
 ```bash
 mkdir -p ~/.local/bin

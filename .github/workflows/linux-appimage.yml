@@ -168,7 +168,9 @@ jobs:
           test -n "$appimage"
           file "$appimage"
           chmod +x "$appimage"
-          sha256sum "$appimage" | tee "$appimage.sha256"
+          # Gravar o digest relativo ao diretório do artefato: um caminho absoluto do runner
+          # tornaria o .sha256 inútil para `sha256sum -c` em outra máquina.
+          ( cd "$(dirname "$appimage")" && sha256sum "$(basename "$appimage")" | tee "$(basename "$appimage").sha256" )
           echo "path=$appimage" >> "$GITHUB_OUTPUT"
 
       - name: Upload AppImage artifact
@@ -189,12 +191,17 @@ jobs:
           set -euo pipefail
           release_tag="linux-$UPSTREAM_TAG"
           appimage='${{ steps.artifact.outputs.path }}'
+          installer="$RUNNER_TEMP/dsh-install.sh"
+          cp tools/linux-appimage/install.sh "$installer"
           notes="AppImage Linux x64 construído a partir do release $UPSTREAM_TAG do upstream mais a branch de empacotamento do fork.
-          Build local sem assinatura: não há canal de assinatura nem de atualização automática."
+          Build local sem assinatura: não há canal de assinatura nem de atualização automática.
+
+          Instalação em uma linha:
+          curl -fsSL https://raw.githubusercontent.com/$FORK_REPO/main/tools/linux-appimage/install.sh | bash"
           if gh release view "$release_tag" --repo "$FORK_REPO" >/dev/null 2>&1; then
-            gh release upload "$release_tag" "$appimage" "$appimage.sha256" --repo "$FORK_REPO" --clobber
+            gh release upload "$release_tag" "$appimage" "$appimage.sha256" "$installer" --repo "$FORK_REPO" --clobber
           else
-            gh release create "$release_tag" "$appimage" "$appimage.sha256" \
+            gh release create "$release_tag" "$appimage" "$appimage.sha256" "$installer" \
               --repo "$FORK_REPO" \
               --title "DSH Linux x64 — $UPSTREAM_TAG" \
               --notes "$notes" \
