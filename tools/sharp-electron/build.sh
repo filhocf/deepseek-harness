@@ -118,6 +118,17 @@ mkdir -p "$(dirname "$OUTPUT")"
 cp -a "$WORK/node_modules/sharp" "$OUTPUT"
 mkdir -p "$OUTPUT/lib"
 cp -a "$LIBVIPS_FILE" "$OUTPUT/lib/"
+# Runtime dependencies travel with the exported package: the CI consumes only
+# $DSH_SHARP_ELECTRON_PACKAGE, without a source checkout to resolve them from.
+mkdir -p "$OUTPUT/node_modules"
+for dependency in semver detect-libc; do
+  test -d "$WORK/node_modules/$dependency" \
+    || { echo "sharp-electron: missing runtime dependency $dependency" >&2; exit 1; }
+  cp -a "$WORK/node_modules/$dependency" "$OUTPUT/node_modules/"
+done
+if [ -d "$WORK/node_modules/@img" ]; then
+  cp -a "$WORK/node_modules/@img" "$OUTPUT/node_modules/"
+fi
 node -e "const p=require('$OUTPUT/package.json'); if(p.version !== process.env.EXPECTED) throw new Error('built sharp version '+p.version+' != '+process.env.EXPECTED)"
 mkdir -p "$OUTPUT/src/build/Release"
 cp -a "$binding" "$OUTPUT/src/build/Release/"

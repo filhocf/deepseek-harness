@@ -21,6 +21,8 @@ export const SHARP_ELECTRON_MANIFEST_NAME = 'build-manifest.json'
 
 const BUILD_DEV_DEPENDENCIES = ['node-addon-api', 'node-gyp'] as const
 const RUNTIME_DEPENDENCIES = ['semver', 'detect-libc', '@img'] as const
+/** The patched tree builds sharp against the fork's libvips, so @img prebuilts are intentionally absent. */
+const PATCHED_RUNTIME_DEPENDENCIES = ['semver', 'detect-libc'] as const
 const SMOKE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -192,6 +194,8 @@ export async function prepareSharpElectron(options: {
     const sourceRoots = [
       process.env.DSH_SHARP_ELECTRON_DEPS,
       process.env.DSH_SHARP_ELECTRON_SOURCE,
+      // The exported package carries its own node_modules, so CI needs no source checkout.
+      externalPackage,
       dirname(externalPackage),
       dirname(dirname(externalPackage)),
     ].filter((value): value is string => value !== undefined && value !== '')
@@ -199,34 +203,24 @@ export async function prepareSharpElectron(options: {
     if (existsSync(packagedSharp)) {
       rmSync(join(options.output, 'node_modules', '@img'), { recursive: true, force: true })
       rmSync(join(options.output, 'linux-x64', 'sharp', 'node_modules', '@img'), { recursive: true, force: true })
-      const packagedNodeModules = join(packagedSharp, 'node_modules')
-      mkdirSync(packagedNodeModules, { recursive: true })
-      for (const name of ['@img', 'detect-libc', 'semver']) {
-        rmSync(join(packagedNodeModules, name), { recursive: true, force: true })
-      }
-      for (const name of RUNTIME_DEPENDENCIES) {
-        const dependency = dependencyRoots.map(root => join(root, name)).find(existsSync)
-        if (dependency === undefined) throw new Error(`desktop package: patched sharp package missing runtime dependency ${name}; set DSH_SHARP_ELECTRON_DEPS or DSH_SHARP_ELECTRON_SOURCE`)
-        cpSync(dependency, join(packagedNodeModules, name), { recursive: true, dereference: true })
+    }
+    const dependencyTargets = existsSync(packagedSharp)
+      ? [join(packagedSharp, 'node_modules')]
+      : [runtimeNodeModules]
+    for (const target of dependencyTargets) {
+      mkdirSync(target, { recursive: true })
+      for (const name of ['@img', ...PATCHED_RUNTIME_DEPENDENCIES]) {
+        rmSync(join(target, name), { recursive: true, force: true })
       }
     }
-    if (!existsSync(packagedSharp)) {
-      mkdirSync(runtimeNodeModules, { recursive: true })
-      for (const name of RUNTIME_DEPENDENCIES) {
-        const dependency = dependencyRoots.map(root => join(root, name)).find(existsSync)
-        if (dependency === undefined) throw new Error(`desktop package: patched sharp package missing runtime dependency ${name}; set DSH_SHARP_ELECTRON_DEPS or DSH_SHARP_ELECTRON_SOURCE`)
-        cpSync(dependency, join(runtimeNodeModules, name), { recursive: true, dereference: true })
-      }
+    // O pacote patchado compila sharp contra o libvips do próprio fork; os binários
+    // pré-compilados de @img não existem nessa árvore e não devem ser exigidos.
+    for (const name of PATCHED_RUNTIME_DEPENDENCIES) {
+      const dependency = dependencyRoots.map(root => join(root, name)).find(existsSync)
+      if (dependency === undefined) throw new Error(`desktop package: patched sharp package missing runtime dependency ${name}; set DSH_SHARP_ELECTRON_DEPS or DSH_SHARP_ELECTRON_SOURCE`)
+      for (const target of dependencyTargets) cpSync(dependency, join(target, name), { recursive: true, dereference: true })
     }
     rmSync(join(options.output, 'linux-x64', 'sharp', 'node_modules', '@img'), { recursive: true, force: true })
-    if (existsSync(packagedSharp)) {
-      const packagedNodeModules = join(packagedSharp, 'node_modules')
-      for (const name of RUNTIME_DEPENDENCIES) {
-        const dependency = dependencyRoots.map(root => join(root, name)).find(existsSync)
-        if (dependency === undefined) throw new Error(`desktop package: patched sharp package missing runtime dependency ${name}; set DSH_SHARP_ELECTRON_DEPS or DSH_SHARP_ELECTRON_SOURCE`)
-        cpSync(dependency, join(packagedNodeModules, name), { recursive: true, dereference: true })
-      }
-    }
     const expected: SharpElectronManifest = { sharpVersion, electronNodeVersion: electronNodeVersion(options.electron), platformArch: `${process.platform}-${process.arch}` }
     assertPreparedBinding(options.output, expected)
     const manifestPath = join(options.output, SHARP_ELECTRON_MANIFEST_NAME)
