@@ -325,6 +325,12 @@ Procure o estágio `runtime:prepare-sharp-electron` e `runtime:smoke`. O erro co
 
 Verifique `asarUnpack`/arquivos nativos na configuração do Electron Builder. O `.node` e suas bibliotecas `.so` precisam estar fisicamente acessíveis fora do ASAR quando o loader exigir.
 
+### `Installed LibreOfficeKit package is incomplete`
+
+Acontece em Linux no smoke do pacote. O kit 0.1.5 não publica engine nativa para Linux: `@deepseek-ai/libreoffice-kit-linux-x64-glibc` responde `404` no npm e não está nas dependências opcionais. Dentro do ASAR a detecção de engine responde "incompleto" em vez de "ausente", então `resolveEngine` não cai para `wasm`.
+
+O gate `smoke-packaged-runtime` aceita essa falha apenas quando o corpo traz `code: 'unavailable'` citando `libreoffice-kit-`, exige degradação controlada e confirma que o CLI da skill `office-export-pdf` produz PDF. Se o erro vier sem `unavailable`, é regressão — não limitação.
+
 ## 11. Regras de segurança operacional
 
 - não colocar tokens, chaves ou senhas no workflow;

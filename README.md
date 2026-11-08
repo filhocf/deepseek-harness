@@ -78,6 +78,8 @@ DSH_EXPECTED_SHA256=<digest> curl -fsSL .../install.sh | bash
 
 Fork-specific operation notes: [docs/_fork/RETOMADA-linux-appimage.md](docs/_fork/RETOMADA-linux-appimage.md) and [docs/_fork/RUNBOOK-linux-appimage.md](docs/_fork/RUNBOOK-linux-appimage.md). Upstream documentation remains in the sections above.
 
+Known limitation: the LibreOffice kit publishes no native Linux engine, so direct Office-to-PDF conversion is unavailable on this platform; the `office-export-pdf` skill CLI remains functional. See the retomada note for the gate that enforces this degradation.
+
 ## Citation
 
 ```bibtex

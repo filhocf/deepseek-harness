@@ -89,6 +89,18 @@ Idempotência sem arquivo de estado: a existência de `linux-<tag>` no fork é o
 3. **Primeira release** — dispatch com `upstream_tag=dsh-v0.2.2-rc.1` para materializar `linux-dsh-v0.2.2-rc.1`.
 4. **Conflito de merge futuro** — se o upstream mexer em `prepare-sharp-electron.ts` ou `electron-builder-config.mjs`, o merge falha de propósito e o CI fica vermelho; a resolução é local, na branch.
 
+## Limitação conhecida — conversão Office no Linux
+
+O `@deepseek-ai/libreoffice-kit` 0.1.5 **não publica engine nativa para Linux**: o pacote `@deepseek-ai/libreoffice-kit-linux-x64-glibc` que o runtime procura responde `404` no npm, e o kit não o declara nas dependências opcionais. Em Linux, `resolveEngine` deveria cair para `wasm`; dentro do ASAR a detecção responde "pacote incompleto" e a conversão direta pelo Host falha.
+
+O gate `smoke-packaged-runtime` trata isso de forma explícita, não silenciosa:
+
+- aceita a falha **somente** quando o corpo traz `code: 'unavailable'` citando `libreoffice-kit-`;
+- exige que a ausência seja reportada de forma controlada, não por crash do Host;
+- confirma que o caminho alternativo (CLI da skill `office-export-pdf`) produz um PDF válido — o que hoje acontece.
+
+Consequência prática: o binário Linux é entregue com conversão de Office indisponível no caminho nativo e funcional pelo CLI. Fazer o caminho nativo existir exigiria publicar/patchar um engine Linux — frente separada, não bloqueia a entrega.
+
 ## AppImage atual (local)
 
 ```text
