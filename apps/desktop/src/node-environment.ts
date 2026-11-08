@@ -2,6 +2,12 @@
 
 import { delimiter } from 'node:path'
 
+/** Add a native-library directory without dropping inherited search paths. */
+export function prependLibraryPath(directory: string, environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const current = environment.LD_LIBRARY_PATH
+  return { ...environment, LD_LIBRARY_PATH: current === undefined || current === '' ? directory : `${directory}${delimiter}${current}` }
+}
+
 /**
  * Select Electron's Node mode and the shell launcher used by package scripts.
  * @param executable - Electron executable running the application.

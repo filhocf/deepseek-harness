@@ -129,7 +129,8 @@ export function validateDesktopPackageEnvironment(environment, target, options =
   resolveDesktopTargetBuildPaths(environment, target.platform, target.arch)
   resolveDesktopAppId(environment)
   resolveNpmRegistry(environment)
-  if (target.platform !== 'darwin' && target.platform !== 'linux' || !options.unsigned) resolveDesktopPolicyEnvironment(environment)
+  // Linux packages embed no mandatory update policy, so they never require its origin.
+  if (target.platform === 'win32' || target.platform === 'darwin' && !options.unsigned) resolveDesktopPolicyEnvironment(environment)
   if (target.platform === 'darwin') resolveMacOSPackageSettings(environment)
   else if (target.platform === 'win32') resolveWindowsPackageSettings(environment)
   if (target.platform === 'linux') {

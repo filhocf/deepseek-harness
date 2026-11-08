@@ -66,7 +66,9 @@ export function createElectronBuilderConfig(
   if (skipNotarization && (unsigned || resolvedPlatform !== 'darwin')) throw new Error('Skipping notarization requires a signed macOS build')
   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
   const packagesWindows = resolvedPlatform === 'win32'
-  const policy = packagesMacOS && unsigned ? undefined : resolveDesktopPolicyEnvironment(env)
+  // The mandatory update policy only supports Windows and macOS updaters; the shell rejects it on Linux at
+  // launch, so Linux packages carry no policy, matching the omitted Linux updater below.
+  const policy = (packagesMacOS && unsigned) || resolvedPlatform === 'linux' ? undefined : resolveDesktopPolicyEnvironment(env)
   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
   const macOSSigning = packagesMacOS && !unsigned ? resolveMacOSSigningEnvironment(env) : undefined
   if (packagesMacOS && !unsigned && !skipNotarization) resolveMacOSNotarizationEnvironment(env)
@@ -256,6 +258,9 @@ export function createElectronBuilderConfig(
     },
     linux: {
       category: 'Development',
+      // Scoped package names are not valid executable filenames for electron-builder's Linux targets.
+      // Keep the package name for metadata, but explicitly use the unscoped product basename.
+      executableName: 'deepseek-harness',
       target: ['AppImage'],
     },
     nsis: {

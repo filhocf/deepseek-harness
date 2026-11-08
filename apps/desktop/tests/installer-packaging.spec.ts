@@ -89,6 +89,30 @@ describe('installer preparation preserves application dependencies', () => {
     }
   })
 
+  it.each([{}, { DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
+    DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }) }])(
+    'omits the mandatory update policy from Linux packages with %j', async (policy) => {
+      const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+      const config = createElectronBuilderConfig({ DSH_DESKTOP_APP_ID: 'com.example.installer', ...policy,
+        DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: 'x64', DSH_DESKTOP_UNSIGNED: '1' }, 'linux', 'x64')
+      // The shell rejects any packaged policy on Linux at launch, as it does for the omitted updater.
+      expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
+      expect(config.publish).toBeNull()
+    })
+
+  it.each(['win32', 'darwin'] as const)('still requires an HTTPS policy origin on %s', async (platform) => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const env = { DSH_DESKTOP_APP_ID: 'com.example.installer', DSH_DESKTOP_TARGET_PLATFORM: platform,
+      DSH_DESKTOP_TARGET_ARCH: 'x64', DSH_DESKTOP_UNSIGNED: platform === 'win32' ? '1' : '0',
+      DSH_DESKTOP_MACOS_SIGNING_IDENTITY: 'Example Company (TEAMID1234)', DSH_DESKTOP_MACOS_TEAM_ID: 'TEAMID1234',
+      APPLE_KEYCHAIN_PROFILE: 'installer-test',
+      DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }) }
+    for (const origin of [undefined, 'http://policy.example.com']) {
+      expect(() => createElectronBuilderConfig({ ...env, DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: origin }, platform, 'x64'))
+        .toThrow('HTTPS origin')
+    }
+  })
+
   it('names unsigned Windows artifacts so they cannot pass for release builds', async () => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     const config = createElectronBuilderConfig({

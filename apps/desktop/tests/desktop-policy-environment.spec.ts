@@ -58,3 +58,10 @@ it.each([{ unsigned: true }, { prepareOnly: true }, {}])('requires policy outsid
       .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
   }
 })
+
+it('requires no policy origin for unsigned Linux packages, which embed no policy', () => {
+  expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_APP_ID: 'com.example.test' }, { platform: 'linux', arch: 'x64' }, { unsigned: true }) })
+    .not.toThrow()
+  expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_APP_ID: 'com.example.test' }, { platform: 'linux', arch: 'x64' }) })
+    .toThrow('linux targets must be unsigned')
+})
