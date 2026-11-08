@@ -7,10 +7,11 @@ origin   https://github.com/filhocf/deepseek-harness.git
 upstream https://github.com/deepseek-ai/deepseek-harness.git
 ```
 
-Branch de trabalho atual:
+Branch de trabalho:
 
 ```text
-experiment/linux-package-target
+main          # empacotamento Linux; default do fork
+master        # espelho do upstream, só fast-forward
 ```
 
 ## 1. Pré-requisitos locais
@@ -43,11 +44,11 @@ git log --oneline HEAD..upstream/master
 Se o branch estiver limpo e a integração for desejada:
 
 ```bash
-git switch experiment/linux-package-target
+git switch main
 git merge --ff-only upstream/master
 ```
 
-Se houver divergência ou conflitos, pare e registre a decisão antes de resolver. O workflow também verifica que a ref escolhida é descendente de `upstream/master`.
+Se houver divergência ou conflitos, pare e registre a decisão antes de resolver. O workflow reporta a distância até `upstream/master` sem bloquear: quem integra a release é o modo de acompanhamento, que faz merge da tag.
 
 ## 3. Ambiente local
 
@@ -192,7 +193,7 @@ Workflow:
 Gatilhos:
 
 - `workflow_dispatch`, com `upstream_tag` e `force` opcionais;
-- push em `experiment/linux-package-target` (ignora `docs/**` e `*.md`);
+- push em `main` (ignora `docs/**` e `*.md`);
 - agendamento diário (`17 4 * * *`).
 
 Dois modos no mesmo job:
@@ -209,7 +210,7 @@ Execução manual de iteração:
 ```bash
 gh workflow run linux-appimage.yml \
   --repo filhocf/deepseek-harness \
-  --ref experiment/linux-package-target
+  --ref main
 ```
 
 Execução de acompanhamento para uma tag específica:
@@ -217,7 +218,7 @@ Execução de acompanhamento para uma tag específica:
 ```bash
 gh workflow run linux-appimage.yml \
   --repo filhocf/deepseek-harness \
-  --ref experiment/linux-package-target \
+  --ref main \
   -f upstream_tag=dsh-v0.2.2-rc.1
 ```
 

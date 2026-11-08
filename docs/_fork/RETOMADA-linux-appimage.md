@@ -21,6 +21,15 @@ Duas entregas, não uma:
 
 Nota de leitura do histórico: o CI falhou porque o step `Build patched Sharp/Electron package` e o script `tools/sharp-electron/build.sh` estavam **apenas na worktree** (untracked), nunca commitados. O erro de libvips 8.15.1 é a consequência, não a causa raiz.
 
+## Branches do fork
+
+| Branch | Papel |
+|---|---|
+| `main` | empacotamento Linux; branch de trabalho e default do fork |
+| `master` | espelho fiel do upstream, só fast-forward — permite `git log upstream/master..main` limpo |
+
+Push direto em `main`, sem PR: o fork é nosso e o histórico de iteração deve ficar visível. O espelho separado é o que mantém a comparação com o upstream legível; fundir os dois faria cada release do upstream virar conflito em cima do próprio espelho.
+
 ## Definido como pronto
 
 1. `pnpm run package:desktop:linux:x64` termina com `PACKAGE_EXIT=0`.

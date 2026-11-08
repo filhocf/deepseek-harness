@@ -20,7 +20,7 @@ on:
         type: boolean
   push:
     branches:
-      - experiment/linux-package-target
+      - main
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
