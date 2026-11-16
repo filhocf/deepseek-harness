@@ -105,6 +105,7 @@ jobs:
           git --no-pager log --oneline -3
 
       - name: Report upstream distance
+        if: steps.mode.outputs.build == 'true'
         run: |
           set -euo pipefail
           git remote add upstream "https://github.com/$UPSTREAM_REPO.git" 2>/dev/null || true
@@ -113,30 +114,36 @@ jobs:
           echo "Commits atrás de upstream/master: $behind (informativo; o build de acompanhamento faz merge da tag)."
 
       - name: Set up pnpm
+        if: steps.mode.outputs.build == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 11.28.5
           run_install: false
 
       - name: Set up Node.js
+        if: steps.mode.outputs.build == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 26.13.0
           cache: pnpm
 
       - name: Enable Corepack
+        if: steps.mode.outputs.build == 'true'
         run: corepack enable
 
       - name: Install Linux native build dependencies
+        if: steps.mode.outputs.build == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libvips-dev
           docker version
 
       - name: Install dependencies
+        if: steps.mode.outputs.build == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build patched Sharp/Electron package
+        if: steps.mode.outputs.build == 'true'
         env:
           SHARP_VERSION: 0.35.5
           CONTAINER_ENGINE: docker
@@ -144,16 +151,19 @@ jobs:
         run: tools/sharp-electron/build.sh
 
       - name: Build repository
+        if: steps.mode.outputs.build == 'true'
         env:
           NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm run build
 
       - name: Run Linux packaging tests
+        if: steps.mode.outputs.build == 'true'
         env:
           NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm exec vitest run apps/desktop/tests/desktop-build-paths.spec.ts apps/desktop/tests/package-target.spec.ts apps/desktop/tests/package-target-stages.spec.ts
 
       - name: Build Linux AppImage
+        if: steps.mode.outputs.build == 'true'
         env:
           NODE_OPTIONS: --max-old-space-size=8192
           DSH_DESKTOP_APP_ID: com.deepseek.dsh
@@ -161,6 +171,7 @@ jobs:
         run: pnpm run package:desktop:linux:x64
 
       - name: Locate AppImage
+        if: steps.mode.outputs.build == 'true'
         id: artifact
         run: |
           set -euo pipefail
@@ -178,6 +189,7 @@ jobs:
           echo "sums=$(dirname "$appimage")/SHA256SUMS" >> "$GITHUB_OUTPUT"
 
       - name: Upload AppImage artifact
+        if: steps.mode.outputs.build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: dsh-linux-x64-appimage-${{ github.sha }}
