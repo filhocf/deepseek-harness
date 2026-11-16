@@ -98,6 +98,16 @@ Consequência a fechar: **não há AppImage de rc.2 nem rc.3** — a release do 
 
 Observação pendente de confirmação: os agendamentos executam com 7–8 h de atraso em relação ao `17 4 * * *`; nada no workflow foi alterado para causar isso.
 
+## 2026-11-16 — mercado Linux no upstream e decisão do `.deb`
+
+Comparação com o port não oficial `X2M7/deepseek-harness-linux` (discussão #13027): é fork completo, com `SUPPORTED_TARGETS` estendido a `linux-x64`/`linux-arm64`, electron-builder gerando AppImage + **deb** + **rpm**, matriz de runners x64 e arm64, `SHA256SUMS`, release por tag própria `linux-v*`. Não tem tratamento do sharp: nenhum step recompila ou substitui o binding, então o SIGSEGV do Electron-as-Node (#10197/#10946) permanece sem resposta dele; e a sincronização com o upstream é manual.
+
+Nossa vantagem permanece: build por release do upstream, sharp compilado contra o libvips do fork com smoke sob Electron, e instalador que confere digest.
+
+**Decisão aprovada**: adicionar `deb` ao alvo Linux (`target: ['AppImage', 'deb']` em `electron-builder-config.mjs`, com `deb.packageName`), incluindo o `.deb` nos assets, no `SHA256SUMS` e na nota da release; uso passa a ser `sudo apt install ./deepseek-harness_<versão>_amd64.deb`. Custo baixo: o electron-builder gera os dois no mesmo passo.
+
+**Fora de escopo por ora**: arm64 — exigiria runner `ubuntu-24.04-arm` e libvips/sharp para aarch64.
+
 ## Pendências abertas
 
 1. **Release rc.3** — o código já está em `main`; falta o CI verde e o dispatch de acompanhamento para publicar `linux-dsh-v0.2.2-rc.3` (rc.2 fica sem release: rc.3 a supersede).
