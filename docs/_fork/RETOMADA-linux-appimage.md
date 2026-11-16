@@ -83,9 +83,24 @@ O pacote Sharp patchado é construído por `tools/sharp-electron/build.sh` e fic
 
 Idempotência sem arquivo de estado: a existência de `linux-<tag>` no fork é o registro. `force=true` refaz.
 
+## 2026-11-16 — upstream rc.2/rc.3 e a quebra do acompanhamento
+
+O upstream publicou `dsh-v0.2.2-rc.2` (11/nov) e `dsh-v0.2.2-rc.3` (13/nov); nenhuma resposta nova nos fios #10197, #8735 e #10946.
+
+Duas falhas ficaram visíveis nos runs agendados:
+
+1. **9 e 10/nov** — "sucesso" com 30–35 min: o step de decisão reportava `build=false` (release já publicada), mas só `Merge` e `Publish` obedeciam, então o runner construía tudo e não publicava. Corrigido em `034a8febf0`: todos os steps de trabalho dependem de `build=true`.
+2. **11 a 15/nov** — falha em ~40 s em `Merge upstream release`: a release rc.2/rc.3 conflita com os nossos patches em `apps/desktop/scripts/smoke-runtime.ts` e `smoke-prepared-runtime.ts`. O upstream reescreveu o smoke do Office (rotas `/desktop-smoke-skills` e `/desktop-smoke-office-operations` com `renderImages`/`convertTo`/`recalculate`) e removeu o endpoint de CLI que usávamos.
+
+Resolução do merge `dsh-v0.2.2-rc.3` em `db7360a83d`: mantidas as checagens novas do upstream **e** a degradação controlada do engine Office no Linux; endpoint de CLI obsoleto removido; `runtimeArchivePath` importado de `cli.ts`; `prependLibraryPath` preservado. Typecheck e 111 testes passaram antes do push.
+
+Consequência a fechar: **não há AppImage de rc.2 nem rc.3** — a release do fork segue em `linux-dsh-v0.2.2-rc.1`. O próximo passo é o run da `main` ficar verde e disparar `upstream_tag=dsh-v0.2.2-rc.3`.
+
+Observação pendente de confirmação: os agendamentos executam com 7–8 h de atraso em relação ao `17 4 * * *`; nada no workflow foi alterado para causar isso.
+
 ## Pendências abertas
 
-1. **Cron diário** — o agendamento (`17 4 * * *`) ainda não disparou sozinho; a primeira execução automática será o próximo teste do automatismo.
+1. **Release rc.3** — o código já está em `main`; falta o CI verde e o dispatch de acompanhamento para publicar `linux-dsh-v0.2.2-rc.3` (rc.2 fica sem release: rc.3 a supersede).
 2. **Conflito de merge futuro** — se o upstream mexer em `prepare-sharp-electron.ts`, `electron-builder-config.mjs` ou `smoke-runtime.ts`, o merge falha de propósito e o CI fica vermelho; a resolução é local, em `main`.
 3. **Engine Office nativo** — frente separada; o Linux entrega degradação controlada, com PDF pelo CLI.
 
